@@ -24,6 +24,10 @@ jobs:
           chmod +x scripts/healthcheck.sh
           ./scripts/healthcheck.sh
 
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs test-app || true
+
       - name: Cleanup
         if: always()
         run: docker rm -f test-app

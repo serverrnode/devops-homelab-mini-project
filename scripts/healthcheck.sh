@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000)
+URL="http://127.0.0.1:5000"
+TRIES=30
+SLEEP=1
 
-if [ "$STATUS" -ne 200 ]; then
-  echo "App is unhealthy (HTTP $STATUS)"
-  exit 1
-fi
+for i in $(seq 1 "$TRIES"); do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || true)
 
-echo "App is healthy (HTTP $STATUS)"
+  if [ "$STATUS" = "200" ]; then
+    echo "App is healthy (HTTP $STATUS)"
+    exit 0
+  fi
+
+  echo "Waiting for app... attempt $i/$TRIES (got HTTP ${STATUS:-none})"
+  sleep "$SLEEP"
+done
+
+echo "App did not become healthy in time"
+exit 1
