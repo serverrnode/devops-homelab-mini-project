@@ -2,17 +2,20 @@
 
 A small weather web application built as a learning project while exploring DevOps fundamentals in my free time.
 
-The app allows users to search for a city or country, select a location, and view the current weather and a simple forecast.
+The app allows users to search for a city or country, select a location, and view the current weather and a simple forecast with interactive data visualizations.
 
 It is fully containerised with Docker and validated using GitHub Actions CI.
 
 ---
 
 ## Features
-- Search for cities and countries
+- Search for cities and countries worldwide
 - Select from multiple matching locations
-- View current weather conditions
-- View a simple daily forecast
+- View current weather conditions (temperature, humidity, wind speed)
+- Interactive temperature forecast chart (min/max over 7 days)
+- Interactive precipitation forecast chart
+- Visual 7-day weather summary cards
+- Responsive design for mobile and desktop
 - Frontend + backend running in Docker containers
 
 ---
@@ -20,6 +23,7 @@ It is fully containerised with Docker and validated using GitHub Actions CI.
 ## Tech Stack
 - **Frontend**: HTML, CSS, JavaScript (served with Nginx)
 - **Backend**: Node.js (Express)
+- **Charts**: Chart.js for data visualization
 - **Weather data**: Open-Meteo (free, no API key required)
 - **Containers**: Docker & Docker Compose
 - **CI**: GitHub Actions
@@ -36,6 +40,8 @@ weather-homelab/
 ├── frontend/
 │   ├── Dockerfile
 │   ├── index.html
+│   ├── styles.css
+│   ├── app.js
 │   └── nginx.conf
 ├── docker-compose.yml
 └── README.md
@@ -97,9 +103,13 @@ Everything needed to run the app is included in the containers.
 This project was built as a learning exercise while getting started with DevOps concepts.
 The focus is on containerisation, CI pipelines, and running applications in a homelab environment.
 
+The frontend code is modularized with separate HTML, CSS, and JavaScript files for better maintainability.
+
 ---
 
 ## Future Improvements
 - Automated deployment to a homelab server
 - Monitoring and metrics
 - Kubernetes deployment
+- Additional weather data visualizations (wind, UV index)
+- Location favorites and history
