@@ -23,10 +23,12 @@ app.get("/api/geo", async (req, res) => {
   res.json(data);
 });
 
-// Enhanced weather endpoint with more data
+// Enhanced weather endpoint with more data and configurable forecast days
 app.get("/api/weather", async (req, res) => {
   const lat = Number(req.query.lat);
   const lon = Number(req.query.lon);
+  const days = Number(req.query.days) || 7; // NEW: Support 7, 14, or 16 days
+  
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return res.status(400).json({ error: "Provide numeric lat and lon" });
   }
@@ -51,7 +53,7 @@ app.get("/api/weather", async (req, res) => {
   );
   
   url.searchParams.set("timezone", "auto");
-  url.searchParams.set("forecast_days", "7");
+  url.searchParams.set("forecast_days", String(days)); // NEW: Use days parameter
 
   const r = await fetch(url);
   if (!r.ok) return res.status(502).json({ error: "Weather upstream failed" });

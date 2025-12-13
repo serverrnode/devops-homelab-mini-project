@@ -6,6 +6,8 @@ const locationSelect = document.getElementById('locationSelect');
 const getWeatherBtn = document.getElementById('getWeatherBtn');
 const weatherCard = document.getElementById('weatherCard');
 
+let forecastDays = 7;
+let currentWeatherData = null;
 let locations = [];
 let currentLocation = null;
 let charts = {
@@ -38,6 +40,16 @@ function formatDate(dateString) {
   } else {
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
+}
+
+function formatDateFull(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 }
 
 function formatTime(dateString) {
@@ -104,12 +116,13 @@ async function searchLocations() {
 }
 
 // Get weather data
-async function getWeather() {
+async function getWeather(days = forecastDays) {
   const selectedIndex = locationSelect.value;
   if (selectedIndex === '') return;
 
   const location = locations[selectedIndex];
   currentLocation = location;
+  forecastDays = days;
 
   try {
     getWeatherBtn.textContent = 'Loading...';
@@ -119,9 +132,10 @@ async function getWeather() {
     weatherCard.classList.remove('hidden');
 
     const response = await fetch(
-      `/api/weather?lat=${location.latitude}&lon=${location.longitude}`
+      `/api/weather?lat=${location.latitude}&lon=${location.longitude}&days=${days}`
     );
     const data = await response.json();
+    currentWeatherData = data;
 
     // Get historical data for "this day last year"
     const today = new Date();
@@ -167,7 +181,7 @@ function displayWeather(location, data, historicalData) {
   }
 
   const forecastHTML = daily.time.map((date, index) => `
-    <div class="forecast-day">
+    <div class="forecast-day" onclick="showDayDetails(${index})" style="cursor: pointer;">
       <div class="forecast-date">${formatDate(date)}</div>
       <div class="forecast-temp">
         ${Math.round(daily.temperature_2m_max[index])}° / ${Math.round(daily.temperature_2m_min[index])}°
@@ -178,8 +192,19 @@ function displayWeather(location, data, historicalData) {
       <div style="font-size: 0.85rem; color: #64748b; margin-top: 5px;">
         ☀️ UV ${daily.uv_index_max[index] || 0}
       </div>
+      <div style="font-size: 0.75rem; color: #667eea; margin-top: 8px; font-weight: 600;">
+        Click for details →
+      </div>
     </div>
   `).join('');
+
+  const periodSelector = `
+    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+      <button class="btn-period ${forecastDays === 7 ? 'active' : ''}" onclick="changeForecastPeriod(7)">7 Days</button>
+      <button class="btn-period ${forecastDays === 14 ? 'active' : ''}" onclick="changeForecastPeriod(14)">14 Days</button>
+      <button class="btn-period ${forecastDays === 16 ? 'active' : ''}" onclick="changeForecastPeriod(16)">16 Days</button>
+    </div>
+  `;
 
   weatherCard.innerHTML = `
     <div class="weather-header">
@@ -187,6 +212,8 @@ function displayWeather(location, data, historicalData) {
         📍 ${formatLocationLabel(location)}
       </div>
     </div>
+
+    ${periodSelector}
 
     <!-- Tabs for different views -->
     <div class="tabs">
@@ -227,7 +254,7 @@ function displayWeather(location, data, historicalData) {
 
       <div class="charts-section">
         <div class="chart-container">
-          <div class="chart-title">🌡️ Temperature Forecast</div>
+          <div class="chart-title">🌡️ Temperature Forecast (${forecastDays} Days)</div>
           <div class="chart-wrapper">
             <canvas id="temperatureChart"></canvas>
           </div>
@@ -256,7 +283,7 @@ function displayWeather(location, data, historicalData) {
       </div>
 
       <div class="forecast-section">
-        <div class="forecast-title">📅 7-Day Summary</div>
+        <div class="forecast-title">📅 ${forecastDays}-Day Summary (Click any day for details)</div>
         <div class="forecast-grid">
           ${forecastHTML}
         </div>
@@ -302,6 +329,14 @@ function displayWeather(location, data, historicalData) {
       <p style="margin-top: 15px; color: #64748b; text-align: center;">
         Click anywhere on the map to see weather at that location
       </p>
+    </div>
+
+    <!-- Day Details Modal -->
+    <div id="dayModal" class="modal hidden">
+      <div class="modal-content">
+        <span class="modal-close" onclick="closeDayModal()">&times;</span>
+        <div id="dayModalContent"></div>
+      </div>
     </div>
   `;
 
@@ -963,6 +998,162 @@ function initializeMap(location) {
     }
   });
 }
+
+// Show day details in modal
+window.showDayDetails = function(dayIndex) {
+  if (!currentWeatherData) return;
+  
+  const { daily, hourly } = currentWeatherData;
+  const dayDate = daily.time[dayIndex];
+  
+  // Get hourly data for this specific day
+  const dayStart = new Date(dayDate);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayDate);
+  dayEnd.setHours(23, 59, 59, 999);
+  
+  const dayHourlyLabels = [];
+  const dayHourlyTemp = [];
+  const dayHourlyHumidity = [];
+  const dayHourlyWind = [];
+  
+  hourly.time.forEach((time, i) => {
+    const timeDate = new Date(time);
+    if (timeDate >= dayStart && timeDate <= dayEnd) {
+      dayHourlyLabels.push(formatTime(time));
+      dayHourlyTemp.push(hourly.temperature_2m[i]);
+      dayHourlyHumidity.push(hourly.relative_humidity_2m[i]);
+      dayHourlyWind.push(hourly.wind_speed_10m[i]);
+    }
+  });
+
+  const modal = document.getElementById('dayModal');
+  const content = document.getElementById('dayModalContent');
+  
+  content.innerHTML = `
+    <h2 style="margin-bottom: 20px; color: #1e293b;">📅 ${formatDateFull(dayDate)}</h2>
+    
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px;">
+        <div>
+          <div style="font-size: 0.9rem; opacity: 0.9;">High</div>
+          <div style="font-size: 2rem; font-weight: 700;">${Math.round(daily.temperature_2m_max[dayIndex])}°C</div>
+        </div>
+        <div>
+          <div style="font-size: 0.9rem; opacity: 0.9;">Low</div>
+          <div style="font-size: 2rem; font-weight: 700;">${Math.round(daily.temperature_2m_min[dayIndex])}°C</div>
+        </div>
+        <div>
+          <div style="font-size: 0.9rem; opacity: 0.9;">Precipitation</div>
+          <div style="font-size: 2rem; font-weight: 700;">${daily.precipitation_sum[dayIndex]} mm</div>
+        </div>
+        <div>
+          <div style="font-size: 0.9rem; opacity: 0.9;">UV Index</div>
+          <div style="font-size: 2rem; font-weight: 700;">${daily.uv_index_max[dayIndex] || 0}</div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.3);">
+        <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+          <div>
+            <span style="font-size: 0.9rem; opacity: 0.9;">🌅 Sunrise:</span>
+            <span style="font-weight: 600; margin-left: 8px;">${new Date(daily.sunrise[dayIndex]).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
+          </div>
+          <div>
+            <span style="font-size: 0.9rem; opacity: 0.9;">🌇 Sunset:</span>
+            <span style="font-weight: 600; margin-left: 8px;">${new Date(daily.sunset[dayIndex]).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
+          </div>
+          <div>
+            <span style="font-size: 0.9rem; opacity: 0.9;">💨 Max Wind:</span>
+            <span style="font-weight: 600; margin-left: 8px;">${Math.round(daily.wind_speed_10m_max[dayIndex])} km/h</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    ${dayHourlyLabels.length > 0 ? `
+      <div class="chart-container">
+        <div class="chart-title">🌡️ Hourly Temperature</div>
+        <div class="chart-wrapper">
+          <canvas id="dayTempChart"></canvas>
+        </div>
+      </div>
+      
+      <div class="chart-container">
+        <div class="chart-title">💧 Hourly Humidity</div>
+        <div class="chart-wrapper">
+          <canvas id="dayHumidityChart"></canvas>
+        </div>
+      </div>
+      
+      <div class="chart-container">
+        <div class="chart-title">💨 Hourly Wind Speed</div>
+        <div class="chart-wrapper">
+          <canvas id="dayWindChart"></canvas>
+        </div>
+      </div>
+    ` : '<p style="text-align: center; color: #64748b;">Hourly data not available for this day</p>'}
+  `;
+  
+  modal.classList.remove('hidden');
+  
+  // Create day-specific charts
+  if (dayHourlyLabels.length > 0) {
+    setTimeout(() => {
+      createDayChart('dayTempChart', dayHourlyLabels, dayHourlyTemp, '°C', '#667eea');
+      createDayChart('dayHumidityChart', dayHourlyLabels, dayHourlyHumidity, '%', '#3b82f6');
+      createDayChart('dayWindChart', dayHourlyLabels, dayHourlyWind, ' km/h', '#10b981');
+    }, 100);
+  }
+};
+
+// Create chart for day modal
+function createDayChart(canvasId, labels, data, unit, color) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        borderColor: color,
+        backgroundColor: color.replace(')', ', 0.1)').replace('rgb', 'rgba'),
+        borderWidth: 3,
+        tension: 0.4,
+        fill: true,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          ticks: {
+            callback: function(value) {
+              return value + unit;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// Close day modal
+window.closeDayModal = function() {
+  document.getElementById('dayModal').classList.add('hidden');
+};
+
+// Change forecast period
+window.changeForecastPeriod = function(days) {
+  forecastDays = days;
+  getWeather(days);
+};
 
 // Event listeners
 searchBtn.addEventListener('click', searchLocations);
