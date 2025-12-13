@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Homelab Weather</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 820px; margin: 40px auto; padding: 0 16px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-top: 16px; }
+    input { padding: 10px; width: 100%; max-width: 520px; }
+    button { padding: 10px 14px; margin-left: 8px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    select { padding: 10px; width: 100%; max-width: 520px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    td, th { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>🌤️ Homelab Weather</h1>
+  <p class="muted">Search a city/country, select a location, and view current weather + a simple forecast.</p>
+
+  <div class="card">
+    <div class="row">
+      <input id="q" placeholder="e.g. London, Tokyo, Paris, Nairobi" />
+      <button id="searchBtn">Search</button>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label class="muted">Select a location:</label>
+      <select id="results" disabled></select>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button id="loadWeatherBtn" disabled>Get Weather</button>
+    </div>
+  </div>
+
+  <div class="card" id="output" style="display:none;"></div>
+
+  <script>
+    const qEl = document.getElementById("q");
+    const searchBtn = document.getElementById("searchBtn");
+    const resultsEl = document.getElementById("results");
+    const loadBtn = document.getElementById("loadWeatherBtn");
+    const outputEl = document.getElementById("output");
+
+    function optionLabel(r) {
+      const parts = [r.name, r.admin1, r.country].filter(Boolean);
+      return parts.join(", ");
+    }
+
+    async function search() {
+      const q = qEl.value.trim();
+      if (!q) return;
+
+      resultsEl.innerHTML = "";
+      resultsEl.disabled = true;
+      loadBtn.disabled = true;
+
+      const res = await fetch(`/api/geo?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+
+      const items = (data && data.results) ? data.results : [];
+      if (!items.length) {
+        outputEl.style.display = "block";
+        outputEl.innerHTML = `<p>No results found for <b>${q}</b>.</p>`;
+        return;
+      }
+
+      for (const r of items) {
+        const opt = document.createElement("option");
+        opt.value = JSON.stringify({ lat: r.latitude, lon: r.longitude, label: optionLabel(r) });
+        opt.textContent = optionLabel(r);
+        resultsEl.appendChild(opt);
+      }
+
+      resultsEl.disabled = false;
+      loadBtn.disabled = false;
+      outputEl.style.display = "none";
+    }
+
+    async function loadWeather() {
+      const val = resultsEl.value;
+      if (!val) return;
+
+      const sel = JSON.parse(val);
+      const res = await fetch(`/api/weather?lat=${encodeURIComponent(sel.lat)}&lon=${encodeURIComponent(sel.lon)}`);
+      const data = await res.json();
+
+      const cur = data.current;
+      const daily = data.daily;
+
+      outputEl.style.display = "block";
+      outputEl.innerHTML = `
+        <h2>${sel.label}</h2>
+        <p><b>Current</b>: ${cur.temperature_2m}°C, Humidity ${cur.relative_humidity_2m}%, Wind ${cur.wind_speed_10m} km/h</p>
+
+        <h3>Daily forecast</h3>
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Min</th><th>Max</th><th>Rain</th></tr>
+          </thead>
+          <tbody>
+            ${daily.time.map((t, i) => `
+              <tr>
+                <td>${t}</td>
+                <td>${daily.temperature_2m_min[i]}°C</td>
+                <td>${daily.temperature_2m_max[i]}°C</td>
+                <td>${daily.precipitation_sum[i]} mm</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    searchBtn.addEventListener("click", search);
+    qEl.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+    loadBtn.addEventListener("click", loadWeather);
+  </script>
+</body>
+</html>
