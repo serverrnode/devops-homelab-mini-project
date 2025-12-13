@@ -19,44 +19,138 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build images
         working-directory: weather-homelab
-        run: docker compose build
+        run: docker compose build --no-cache
 
       - name: Start stack
         working-directory: weather-homelab
         run: docker compose up -d
 
-      - name: Wait for app to be ready
+      - name: Wait for backend health
         run: |
+          echo "Waiting for backend to be healthy..."
           for i in {1..30}; do
-            if curl -fsS http://localhost:8085/ >/dev/null; then
-              echo "Frontend is up"
+            if docker exec weather-backend wget -q --spider http://localhost:8080/health 2>/dev/null; then
+              echo "✓ Backend is healthy"
+              exit 0
+            fi
+            echo "Waiting for backend... ($i/30)"
+            sleep 2
+          done
+          echo "✗ Backend did not become healthy in time"
+          exit 1
+
+      - name: Wait for frontend
+        run: |
+          echo "Waiting for frontend to be ready..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8085/ >/dev/null 2>&1; then
+              echo "✓ Frontend is up"
               exit 0
             fi
             echo "Waiting for frontend... ($i/30)"
-            sleep 1
+            sleep 2
           done
-          echo "Frontend did not become ready in time"
+          echo "✗ Frontend did not become ready in time"
           exit 1
 
-      - name: Smoke test API (geo)
+      - name: Verify static assets load
         run: |
-          curl -fsS "http://localhost:8085/api/geo?q=London" | head -c 300
-          echo
+          echo "Checking CSS file..."
+          if curl -fsS http://localhost:8085/styles.css | grep -q "body {"; then
+            echo "✓ CSS file loads correctly"
+          else
+            echo "✗ CSS file not loading"
+            exit 1
+          fi
+          
+          echo "Checking JS file..."
+          if curl -fsS http://localhost:8085/app.js | grep -q "searchLocations"; then
+            echo "✓ JS file loads correctly"
+          else
+            echo "✗ JS file not loading"
+            exit 1
+          fi
 
-      - name: Smoke test API (weather)
+      - name: Smoke test API - Geocoding
         run: |
-          # London coordinates
-          curl -fsS "http://localhost:8085/api/weather?lat=51.5072&lon=-0.1276" | head -c 300
+          echo "Testing geocoding API with London..."
+          RESPONSE=$(curl -fsS "http://localhost:8085/api/geo?q=London")
+          
+          if echo "$RESPONSE" | grep -q '"name":"London"'; then
+            echo "✓ Geocoding API works"
+            echo "$RESPONSE" | head -c 300
+            echo
+          else
+            echo "✗ Geocoding API failed"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Smoke test API - Weather
+        run: |
+          echo "Testing weather API with London coordinates..."
+          RESPONSE=$(curl -fsS "http://localhost:8085/api/weather?lat=51.5072&lon=-0.1276")
+          
+          if echo "$RESPONSE" | grep -q '"current"' && echo "$RESPONSE" | grep -q '"daily"'; then
+            echo "✓ Weather API works"
+            echo "$RESPONSE" | head -c 300
+            echo
+          else
+            echo "✗ Weather API failed"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Test error handling - Invalid geocoding
+        run: |
+          echo "Testing error handling for invalid location..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8085/api/geo?q=")
+          
+          if [ "$HTTP_CODE" == "400" ]; then
+            echo "✓ Error handling works (returned 400 for empty query)"
+          else
+            echo "✗ Expected 400 but got $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Test error handling - Invalid weather request
+        run: |
+          echo "Testing error handling for invalid coordinates..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8085/api/weather?lat=invalid&lon=invalid")
+          
+          if [ "$HTTP_CODE" == "400" ]; then
+            echo "✓ Error handling works (returned 400 for invalid coordinates)"
+          else
+            echo "✗ Expected 400 but got $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Check container health
+        if: always()
+        working-directory: weather-homelab
+        run: |
+          echo "=== Container Status ==="
+          docker compose ps
           echo
+          echo "=== Backend Health ==="
+          docker exec weather-backend wget -q -O- http://localhost:8080/health || echo "Backend health check failed"
 
       - name: Show logs on failure
         if: failure()
         working-directory: weather-homelab
-        run: docker compose logs --no-color
+        run: |
+          echo "=== Frontend Logs ==="
+          docker compose logs frontend
+          echo
+          echo "=== Backend Logs ==="
+          docker compose logs backend
 
       - name: Teardown
         if: always()
         working-directory: weather-homelab
-        run: docker compose down --remove-orphans
+        run: docker compose down --volumes --remove-orphans
