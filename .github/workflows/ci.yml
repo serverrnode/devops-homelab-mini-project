@@ -2,12 +2,20 @@ name: CI - Dummy App
 
 on:
   push:
+    paths:
+      - "dummy-app/**"
     branches: ["main"]
   pull_request:
+    paths:
+      - "dummy-app/**"
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: dummy-app
 
     steps:
       - name: Checkout
@@ -24,7 +32,7 @@ jobs:
           chmod +x scripts/healthcheck.sh
           ./scripts/healthcheck.sh
 
-      - name: Container logs on failure
+      - name: Logs on failure
         if: failure()
         run: docker logs test-app || true
 
