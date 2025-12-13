@@ -1,3 +1,4 @@
+// Global state
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const locationSelectGroup = document.getElementById('locationSelectGroup');
@@ -6,14 +7,51 @@ const getWeatherBtn = document.getElementById('getWeatherBtn');
 const weatherCard = document.getElementById('weatherCard');
 
 let locations = [];
-let temperatureChart = null;
-let precipitationChart = null;
+let currentLocation = null;
+let charts = {
+  temperature: null,
+  precipitation: null,
+  humidity: null,
+  uvIndex: null,
+  wind: null,
+  feelsLike: null
+};
+let map = null;
+let markers = [];
 
+// Utility functions
 function formatLocationLabel(location) {
   const parts = [location.name, location.admin1, location.country].filter(Boolean);
   return parts.join(', ');
 }
 
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today';
+  } else if (date.toDateString() === tomorrow.toDateString()) {
+    return 'Tomorrow';
+  } else {
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+}
+
+function formatTime(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function getWindDirection(degrees) {
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const index = Math.round(degrees / 45) % 8;
+  return directions[index];
+}
+
+// Search locations
 async function searchLocations() {
   const query = searchInput.value.trim();
   if (!query) return;
@@ -26,7 +64,6 @@ async function searchLocations() {
     const data = await response.json();
 
     locations = data.results || [];
-
     locationSelect.innerHTML = '<option value="">Choose a location...</option>';
 
     if (locations.length === 0) {
@@ -66,11 +103,13 @@ async function searchLocations() {
   }
 }
 
+// Get weather data
 async function getWeather() {
   const selectedIndex = locationSelect.value;
   if (selectedIndex === '') return;
 
   const location = locations[selectedIndex];
+  currentLocation = location;
 
   try {
     getWeatherBtn.textContent = 'Loading...';
@@ -84,7 +123,17 @@ async function getWeather() {
     );
     const data = await response.json();
 
-    displayWeather(location, data);
+    // Get historical data for "this day last year"
+    const today = new Date();
+    const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    const lastYearStr = lastYear.toISOString().split('T')[0];
+    
+    const historicalResponse = await fetch(
+      `/api/weather/historical?lat=${location.latitude}&lon=${location.longitude}&start_date=${lastYearStr}&end_date=${lastYearStr}`
+    );
+    const historicalData = await historicalResponse.json();
+
+    displayWeather(location, data, historicalData);
 
   } catch (error) {
     weatherCard.innerHTML = `
@@ -98,8 +147,24 @@ async function getWeather() {
   }
 }
 
-function displayWeather(location, data) {
-  const { current, daily } = data;
+// Display weather
+function displayWeather(location, data, historicalData) {
+  const { current, daily, hourly } = data;
+  
+  // Historical comparison
+  let historicalHTML = '';
+  if (historicalData && historicalData.daily && historicalData.daily.temperature_2m_max && historicalData.daily.temperature_2m_max[0]) {
+    const lastYearMax = Math.round(historicalData.daily.temperature_2m_max[0]);
+    const lastYearMin = Math.round(historicalData.daily.temperature_2m_min[0]);
+    historicalHTML = `
+      <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.3);">
+        <div style="font-size: 0.9rem; opacity: 0.9;">This day last year:</div>
+        <div style="font-size: 1.2rem; font-weight: 600; margin-top: 5px;">
+          ${lastYearMax}°C / ${lastYearMin}°C
+        </div>
+      </div>
+    `;
+  }
 
   const forecastHTML = daily.time.map((date, index) => `
     <div class="forecast-day">
@@ -109,6 +174,9 @@ function displayWeather(location, data) {
       </div>
       <div class="forecast-rain">
         💧 ${daily.precipitation_sum[index]} mm
+      </div>
+      <div style="font-size: 0.85rem; color: #64748b; margin-top: 5px;">
+        ☀️ UV ${daily.uv_index_max[index] || 0}
       </div>
     </div>
   `).join('');
@@ -120,65 +188,171 @@ function displayWeather(location, data) {
       </div>
     </div>
 
-    <div class="current-weather">
-      <div class="current-temp">${Math.round(current.temperature_2m)}°C</div>
-      <div class="weather-details">
-        <div class="weather-detail">
-          <span class="detail-icon">💧</span>
-          <span>${current.relative_humidity_2m}% Humidity</span>
+    <!-- Tabs for different views -->
+    <div class="tabs">
+      <button class="tab active" data-tab="forecast">Forecast</button>
+      <button class="tab" data-tab="hourly">Hourly Details</button>
+      <button class="tab" data-tab="map">Map View</button>
+    </div>
+
+    <!-- Forecast Tab -->
+    <div id="forecastTab" class="tab-content active">
+      <div class="current-weather">
+        <div class="current-temp">${Math.round(current.temperature_2m)}°C</div>
+        <div style="font-size: 1.2rem; margin-bottom: 15px;">
+          Feels like ${Math.round(current.apparent_temperature)}°C
         </div>
-        <div class="weather-detail">
-          <span class="detail-icon">💨</span>
-          <span>${Math.round(current.wind_speed_10m)} km/h Wind</span>
+        <div class="weather-details">
+          <div class="weather-detail">
+            <span class="detail-icon">💧</span>
+            <span>${current.relative_humidity_2m}% Humidity</span>
+          </div>
+          <div class="weather-detail">
+            <span class="detail-icon">💨</span>
+            <span>${Math.round(current.wind_speed_10m)} km/h ${getWindDirection(current.wind_direction_10m)}</span>
+          </div>
+          <div class="weather-detail">
+            <span class="detail-icon">☀️</span>
+            <span>UV Index ${current.uv_index || 0}</span>
+          </div>
+          ${current.precipitation ? `
+          <div class="weather-detail">
+            <span class="detail-icon">🌧️</span>
+            <span>${current.precipitation} mm Rain</span>
+          </div>
+          ` : ''}
+        </div>
+        ${historicalHTML}
+      </div>
+
+      <div class="charts-section">
+        <div class="chart-container">
+          <div class="chart-title">🌡️ Temperature Forecast</div>
+          <div class="chart-wrapper">
+            <canvas id="temperatureChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-title">💧 Precipitation Forecast</div>
+          <div class="chart-wrapper">
+            <canvas id="precipitationChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-title">☀️ UV Index</div>
+          <div class="chart-wrapper">
+            <canvas id="uvChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-title">🌅 Sunrise & Sunset Times</div>
+          <div class="chart-wrapper">
+            <canvas id="sunChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="forecast-section">
+        <div class="forecast-title">📅 7-Day Summary</div>
+        <div class="forecast-grid">
+          ${forecastHTML}
         </div>
       </div>
     </div>
 
-    <div class="charts-section">
-      <div class="chart-container">
-        <div class="chart-title">🌡️ Temperature Forecast</div>
-        <div class="chart-wrapper">
-          <canvas id="temperatureChart"></canvas>
+    <!-- Hourly Tab -->
+    <div id="hourlyTab" class="tab-content">
+      <div class="charts-section">
+        <div class="chart-container">
+          <div class="chart-title">🌡️ Hourly Temperature (Next 48 Hours)</div>
+          <div class="chart-wrapper large">
+            <canvas id="hourlyTempChart"></canvas>
+          </div>
         </div>
-      </div>
 
-      <div class="chart-container">
-        <div class="chart-title">💧 Precipitation Forecast</div>
-        <div class="chart-wrapper">
-          <canvas id="precipitationChart"></canvas>
+        <div class="chart-container">
+          <div class="chart-title">💧 Hourly Humidity (Next 48 Hours)</div>
+          <div class="chart-wrapper large">
+            <canvas id="hourlyHumidityChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-title">💨 Wind Speed & Direction (Next 48 Hours)</div>
+          <div class="chart-wrapper large">
+            <canvas id="hourlyWindChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-title">🌡️ Feels Like Temperature (Next 48 Hours)</div>
+          <div class="chart-wrapper large">
+            <canvas id="feelsLikeChart"></canvas>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="forecast-section">
-      <div class="forecast-title">📅 7-Day Summary</div>
-      <div class="forecast-grid">
-        ${forecastHTML}
-      </div>
+    <!-- Map Tab -->
+    <div id="mapTab" class="tab-content">
+      <div id="map"></div>
+      <p style="margin-top: 15px; color: #64748b; text-align: center;">
+        Click anywhere on the map to see weather at that location
+      </p>
     </div>
   `;
 
   weatherCard.classList.remove('hidden');
 
+  // Setup tabs
+  setupTabs();
+
   // Create charts after DOM is updated
   setTimeout(() => {
     createTemperatureChart(daily);
     createPrecipitationChart(daily);
+    createUVChart(daily);
+    createSunChart(daily);
+    createHourlyCharts(hourly);
+    initializeMap(location);
   }, 100);
 }
 
+// Setup tab switching
+function setupTabs() {
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      // Remove active from all tabs and contents
+      tabs.forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      // Add active to clicked tab
+      tab.classList.add('active');
+      const tabName = tab.getAttribute('data-tab');
+      document.getElementById(`${tabName}Tab`).classList.add('active');
+      
+      // Invalidate map size if switching to map tab
+      if (tabName === 'map' && map) {
+        setTimeout(() => map.invalidateSize(), 100);
+      }
+    });
+  });
+}
+
+// Create temperature chart
 function createTemperatureChart(daily) {
   const ctx = document.getElementById('temperatureChart');
   if (!ctx) return;
 
-  // Destroy existing chart if it exists
-  if (temperatureChart) {
-    temperatureChart.destroy();
-  }
+  if (charts.temperature) charts.temperature.destroy();
 
   const labels = daily.time.map(date => formatDate(date));
 
-  temperatureChart = new Chart(ctx, {
+  charts.temperature = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
@@ -280,18 +454,16 @@ function createTemperatureChart(daily) {
   });
 }
 
+// Create precipitation chart
 function createPrecipitationChart(daily) {
   const ctx = document.getElementById('precipitationChart');
   if (!ctx) return;
 
-  // Destroy existing chart if it exists
-  if (precipitationChart) {
-    precipitationChart.destroy();
-  }
+  if (charts.precipitation) charts.precipitation.destroy();
 
   const labels = daily.time.map(date => formatDate(date));
 
-  precipitationChart = new Chart(ctx, {
+  charts.precipitation = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: labels,
@@ -368,19 +540,428 @@ function createPrecipitationChart(daily) {
   });
 }
 
-function formatDate(dateString) {
-  const date = new Date(dateString);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+// Create UV index chart
+function createUVChart(daily) {
+  const ctx = document.getElementById('uvChart');
+  if (!ctx) return;
 
-  if (date.toDateString() === today.toDateString()) {
-    return 'Today';
-  } else if (date.toDateString() === tomorrow.toDateString()) {
-    return 'Tomorrow';
-  } else {
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (charts.uvIndex) charts.uvIndex.destroy();
+
+  const labels = daily.time.map(date => formatDate(date));
+  const uvData = daily.uv_index_max || daily.time.map(() => 0);
+
+  charts.uvIndex = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'UV Index',
+        data: uvData,
+        backgroundColor: uvData.map(uv => {
+          if (uv < 3) return 'rgba(34, 197, 94, 0.6)';
+          if (uv < 6) return 'rgba(234, 179, 8, 0.6)';
+          if (uv < 8) return 'rgba(249, 115, 22, 0.6)';
+          if (uv < 11) return 'rgba(239, 68, 68, 0.6)';
+          return 'rgba(168, 85, 247, 0.6)';
+        }),
+        borderWidth: 2,
+        borderRadius: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          callbacks: {
+            label: function(context) {
+              const uv = context.parsed.y;
+              let level = 'Low';
+              if (uv >= 11) level = 'Extreme';
+              else if (uv >= 8) level = 'Very High';
+              else if (uv >= 6) level = 'High';
+              else if (uv >= 3) level = 'Moderate';
+              return `UV Index: ${uv} (${level})`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 12,
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)',
+          },
+          ticks: {
+            font: {
+              size: 11
+            }
+          }
+        },
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            font: {
+              size: 11
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// Create sunrise/sunset chart
+function createSunChart(daily) {
+  const ctx = document.getElementById('sunChart');
+  if (!ctx) return;
+
+  if (charts.sun) charts.sun.destroy();
+
+  const labels = daily.time.map(date => formatDate(date));
+  
+  // Convert sunrise/sunset times to minutes from midnight for charting
+  const sunriseMinutes = daily.sunrise.map(time => {
+    const date = new Date(time);
+    return date.getHours() * 60 + date.getMinutes();
+  });
+  
+  const sunsetMinutes = daily.sunset.map(time => {
+    const date = new Date(time);
+    return date.getHours() * 60 + date.getMinutes();
+  });
+
+  charts.sun = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Sunrise',
+          data: sunriseMinutes,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderWidth: 3,
+          tension: 0.4,
+          pointRadius: 5,
+          pointBackgroundColor: '#f59e0b',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+        },
+        {
+          label: 'Sunset',
+          data: sunsetMinutes,
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          borderWidth: 3,
+          tension: 0.4,
+          pointRadius: 5,
+          pointBackgroundColor: '#8b5cf6',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {
+            usePointStyle: true,
+            padding: 15,
+            font: {
+              size: 12,
+              weight: '600'
+            }
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          callbacks: {
+            label: function(context) {
+              const minutes = context.parsed.y;
+              const hours = Math.floor(minutes / 60);
+              const mins = minutes % 60;
+              const time = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+              return context.dataset.label + ': ' + time;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)',
+          },
+          ticks: {
+            callback: function(value) {
+              const hours = Math.floor(value / 60);
+              const mins = value % 60;
+              return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+            },
+            font: {
+              size: 11
+            }
+          }
+        },
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            font: {
+              size: 11
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// Create hourly charts
+function createHourlyCharts(hourly) {
+  // Limit to next 48 hours
+  const next48Hours = 48;
+  const labels = hourly.time.slice(0, next48Hours).map(time => formatTime(time));
+  
+  // Hourly temperature
+  const tempCtx = document.getElementById('hourlyTempChart');
+  if (tempCtx) {
+    if (charts.hourlyTemp) charts.hourlyTemp.destroy();
+    
+    charts.hourlyTemp = new Chart(tempCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Temperature',
+          data: hourly.temperature_2m.slice(0, next48Hours),
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+        }]
+      },
+      options: getHourlyChartOptions('°C')
+    });
   }
+
+  // Hourly humidity
+  const humidityCtx = document.getElementById('hourlyHumidityChart');
+  if (humidityCtx) {
+    if (charts.humidity) charts.humidity.destroy();
+    
+    charts.humidity = new Chart(humidityCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Humidity',
+          data: hourly.relative_humidity_2m.slice(0, next48Hours),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+        }]
+      },
+      options: getHourlyChartOptions('%')
+    });
+  }
+
+  // Hourly wind
+  const windCtx = document.getElementById('hourlyWindChart');
+  if (windCtx) {
+    if (charts.wind) charts.wind.destroy();
+    
+    charts.wind = new Chart(windCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Wind Speed',
+          data: hourly.wind_speed_10m.slice(0, next48Hours),
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+        }]
+      },
+      options: getHourlyChartOptions('km/h')
+    });
+  }
+
+  // Feels like temperature
+  const feelsLikeCtx = document.getElementById('feelsLikeChart');
+  if (feelsLikeCtx) {
+    if (charts.feelsLike) charts.feelsLike.destroy();
+    
+    charts.feelsLike = new Chart(feelsLikeCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Actual Temperature',
+            data: hourly.temperature_2m.slice(0, next48Hours),
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+          },
+          {
+            label: 'Feels Like',
+            data: hourly.apparent_temperature.slice(0, next48Hours),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+          }
+        ]
+      },
+      options: getHourlyChartOptions('°C')
+    });
+  }
+}
+
+function getHourlyChartOptions(unit) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+            weight: '600'
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 12,
+      }
+    },
+    scales: {
+      y: {
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)',
+        },
+        ticks: {
+          callback: function(value) {
+            return value + unit;
+          },
+          font: {
+            size: 10
+          }
+        }
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          maxRotation: 45,
+          minRotation: 45,
+          font: {
+            size: 9
+          }
+        }
+      }
+    }
+  };
+}
+
+// Initialize Leaflet map
+function initializeMap(location) {
+  const mapDiv = document.getElementById('map');
+  if (!mapDiv) return;
+
+  // Clear existing map
+  if (map) {
+    map.remove();
+  }
+
+  // Create map
+  map = L.map('map').setView([location.latitude, location.longitude], 10);
+
+  // Add tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // Add marker for selected location
+  const marker = L.marker([location.latitude, location.longitude]).addTo(map);
+  marker.bindPopup(`
+    <div class="popup-location">${formatLocationLabel(location)}</div>
+    <div class="popup-details">Click anywhere on the map to check weather</div>
+  `).openPopup();
+
+  markers.push(marker);
+
+  // Add click handler for map
+  map.on('click', async function(e) {
+    const lat = e.latlng.lat;
+    const lon = e.latlng.lng;
+
+    try {
+      const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+      const data = await response.json();
+
+      const newMarker = L.marker([lat, lon]).addTo(map);
+      newMarker.bindPopup(`
+        <div class="popup-location">Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}</div>
+        <div class="popup-temp">${Math.round(data.current.temperature_2m)}°C</div>
+        <div class="popup-details">
+          Feels like: ${Math.round(data.current.apparent_temperature)}°C<br>
+          Humidity: ${data.current.relative_humidity_2m}%<br>
+          Wind: ${Math.round(data.current.wind_speed_10m)} km/h
+        </div>
+      `).openPopup();
+
+      markers.push(newMarker);
+    } catch (error) {
+      console.error('Failed to fetch weather for map location:', error);
+    }
+  });
 }
 
 // Event listeners
