@@ -276,9 +276,7 @@ function displayWeather(location, data, historicalData) {
 
         <div class="chart-container">
           <div class="chart-title">🌅 Sunrise & Sunset Times</div>
-          <div class="chart-wrapper">
-            <canvas id="sunChart"></canvas>
-          </div>
+          <div id="sunTimesContainer" class="sun-times-grid"></div>
         </div>
       </div>
 
@@ -350,7 +348,7 @@ function displayWeather(location, data, historicalData) {
     createTemperatureChart(daily);
     createPrecipitationChart(daily);
     createUVChart(daily);
-    createSunChart(daily);
+    createSunTimesDisplay(daily);
     createHourlyCharts(hourly);
     initializeMap(location);
   }, 100);
@@ -654,120 +652,42 @@ function createUVChart(daily) {
   });
 }
 
-// Create sunrise/sunset chart
-function createSunChart(daily) {
-  const ctx = document.getElementById('sunChart');
-  if (!ctx) return;
-
-  if (charts.sun) charts.sun.destroy();
-
-  const labels = daily.time.map(date => formatDate(date));
+// Create sun times display with visual timeline (replaces createSunChart)
+function createSunTimesDisplay(daily) {
+  const container = document.getElementById('sunTimesContainer');
+  if (!container) return;
   
-  // Convert sunrise/sunset times to minutes from midnight for charting
-  const sunriseMinutes = daily.sunrise.map(time => {
-    const date = new Date(time);
-    return date.getHours() * 60 + date.getMinutes();
-  });
+  const html = daily.time.map((date, index) => {
+    const sunrise = new Date(daily.sunrise[index]);
+    const sunset = new Date(daily.sunset[index]);
+    
+    // Calculate daylight duration
+    const daylightMs = sunset - sunrise;
+    const hours = Math.floor(daylightMs / (1000 * 60 * 60));
+    const minutes = Math.floor((daylightMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    // Calculate position on 24-hour timeline (0-1440 minutes)
+    const sunriseMinutes = sunrise.getHours() * 60 + sunrise.getMinutes();
+    const sunsetMinutes = sunset.getHours() * 60 + sunset.getMinutes();
+    const leftPercent = (sunriseMinutes / 1440) * 100;
+    const widthPercent = ((sunsetMinutes - sunriseMinutes) / 1440) * 100;
+    
+    return `
+      <div class="sun-card">
+        <div class="sun-date">${formatDate(date)}</div>
+        <div class="timeline-bar">
+          <div class="daylight-bar" style="left: ${leftPercent}%; width: ${widthPercent}%;"></div>
+        </div>
+        <div class="sun-info">
+          <span class="sun-time">🌅 ${sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
+          <span class="daylight-duration">${hours}h ${minutes}m</span>
+          <span class="sun-time">🌇 ${sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
   
-  const sunsetMinutes = daily.sunset.map(time => {
-    const date = new Date(time);
-    return date.getHours() * 60 + date.getMinutes();
-  });
-
-  charts.sun = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Sunrise',
-          data: sunriseMinutes,
-          borderColor: '#f59e0b',
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          borderWidth: 3,
-          tension: 0.4,
-          pointRadius: 5,
-          pointBackgroundColor: '#f59e0b',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-        },
-        {
-          label: 'Sunset',
-          data: sunsetMinutes,
-          borderColor: '#8b5cf6',
-          backgroundColor: 'rgba(139, 92, 246, 0.1)',
-          borderWidth: 3,
-          tension: 0.4,
-          pointRadius: 5,
-          pointBackgroundColor: '#8b5cf6',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
-      plugins: {
-        legend: {
-          display: true,
-          position: 'top',
-          labels: {
-            usePointStyle: true,
-            padding: 15,
-            font: {
-              size: 12,
-              weight: '600'
-            }
-          }
-        },
-        tooltip: {
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          padding: 12,
-          callbacks: {
-            label: function(context) {
-              const minutes = context.parsed.y;
-              const hours = Math.floor(minutes / 60);
-              const mins = minutes % 60;
-              const time = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-              return context.dataset.label + ': ' + time;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          grid: {
-            color: 'rgba(0, 0, 0, 0.05)',
-          },
-          ticks: {
-            callback: function(value) {
-              const hours = Math.floor(value / 60);
-              const mins = value % 60;
-              return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-            },
-            font: {
-              size: 11
-            }
-          }
-        },
-        x: {
-          grid: {
-            display: false,
-          },
-          ticks: {
-            font: {
-              size: 11
-            }
-          }
-        }
-      }
-    }
-  });
+  container.innerHTML = html;
 }
 
 // Create hourly charts
@@ -1130,12 +1050,34 @@ function createDayChart(canvasId, labels, data, unit, color) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: { 
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+        }
+      },
       scales: {
         y: {
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)',
+          },
           ticks: {
             callback: function(value) {
               return value + unit;
+            },
+            font: {
+              size: 11
+            }
+          }
+        },
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            font: {
+              size: 10
             }
           }
         }
@@ -1160,7 +1102,7 @@ searchBtn.addEventListener('click', searchLocations);
 searchInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') searchLocations();
 });
-getWeatherBtn.addEventListener('click', getWeather);
+getWeatherBtn.addEventListener('click', () => getWeather());
 locationSelect.addEventListener('change', () => {
   getWeatherBtn.disabled = locationSelect.value === '';
 });
