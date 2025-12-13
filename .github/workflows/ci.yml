@@ -1,0 +1,29 @@
+name: CI - Dummy App
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t dummy-app:ci .
+
+      - name: Run container
+        run: docker run -d -p 5000:5000 --name test-app dummy-app:ci
+
+      - name: Health check
+        run: |
+          chmod +x scripts/healthcheck.sh
+          ./scripts/healthcheck.sh
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f test-app
