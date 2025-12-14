@@ -137,7 +137,7 @@ jobs:
       - name: Test metrics endpoint
         run: |
           echo "Testing metrics endpoint..."
-          RESPONSE=$(docker exec weather-backend curl -fsS http://localhost:8080/metrics)
+          RESPONSE=$(docker exec weather-backend wget -q -O- http://localhost:8080/metrics)
           
           if echo "$RESPONSE" | grep -q 'weather_app_requests_total' && \
              echo "$RESPONSE" | grep -q 'weather_app_uptime_seconds'; then
@@ -214,7 +214,7 @@ jobs:
           
           sleep 2
           
-          METRICS=$(docker exec weather-backend curl -fsS http://localhost:8080/metrics)
+          METRICS=$(docker exec weather-backend wget -q -O- http://localhost:8080/metrics)
           
           if echo "$METRICS" | grep -q 'weather_app_errors_total'; then
             echo "✓ Error tracking is working"
