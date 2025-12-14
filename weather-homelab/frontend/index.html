@@ -3,64 +3,56 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Weather Homelab - Advanced Analytics</title>
-  
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""/>
-  
-  <!-- Styles -->
-  <link rel="stylesheet" href="styles.css">
-  
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""></script>
+  <title>Weather Homelab</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div class="container">
     <div class="header">
       <h1>🌤️ Weather Homelab</h1>
-      <p>Advanced weather analytics with historical data, interactive maps, and detailed forecasts</p>
+      <p>Search for any location and view detailed weather forecasts</p>
     </div>
 
     <div class="search-card">
       <div class="search-container">
-        <input 
-          id="searchInput" 
-          class="search-input" 
-          type="text" 
-          placeholder="Search for a city... (e.g., London, Tokyo, New York)"
-          autocomplete="off"
-        />
+        <input type="text" id="searchInput" class="search-input" placeholder="Search for a city (e.g., London, Tokyo, Paris)" />
         <button id="searchBtn" class="btn btn-primary">Search</button>
       </div>
 
-      <div class="form-group" id="locationSelectGroup" style="display: none;">
-        <label class="form-label">📍 Select a location:</label>
-        <select id="locationSelect" class="select-box">
-          <option value="">Choose a location...</option>
-        </select>
+      <div id="locationSelectGroup" class="form-group" style="display:none;">
+        <label class="form-label">Select a location:</label>
+        <select id="locationSelect" class="select-box" disabled></select>
       </div>
 
-      <div style="margin-top: 20px;">
+      <div style="margin-top:16px;">
         <button id="getWeatherBtn" class="btn btn-primary" disabled>Get Weather</button>
       </div>
     </div>
 
-    <div id="weatherCard" class="weather-card hidden"></div>
+    <div id="weatherCard" class="weather-card" style="display:none;"></div>
   </div>
 
-  <!-- Application Script -->
-  <script src="app.js"></script>
+  <div id="dayModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeDayModal()">&times;</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- External Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+  
+  <!-- Chart Modules (load in order) -->
+  <script src="/charts-helpers.js"></script>
+  <script src="/charts-temperature.js"></script>
+  <script src="/charts-precipitation.js"></script>
+  <script src="/charts-uv.js"></script>
+  <script src="/charts-sun.js"></script>
+  <script src="/charts-hourly.js"></script>
+  
+  <!-- Main Application -->
+  <script src="/app.js"></script>
 </body>
 </html>
