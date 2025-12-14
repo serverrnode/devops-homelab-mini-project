@@ -1,0 +1,137 @@
+{
+  "dashboard": {
+    "title": "Weather App Monitoring",
+    "panels": [
+      {
+        "title": "Total Requests",
+        "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "weather_app_requests_total",
+            "legendFormat": "Total Requests"
+          }
+        ],
+        "type": "stat",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 100, "color": "yellow"},
+                {"value": 1000, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Average Response Time",
+        "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "weather_app_response_time_ms",
+            "legendFormat": "Avg Response Time (ms)"
+          }
+        ],
+        "type": "stat",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 500, "color": "yellow"},
+                {"value": 1000, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Uptime",
+        "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "weather_app_uptime_seconds",
+            "legendFormat": "Uptime (seconds)"
+          }
+        ],
+        "type": "stat",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 60, "color": "yellow"},
+                {"value": 300, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Requests Over Time",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(weather_app_requests_total[5m])",
+            "legendFormat": "Requests/sec"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "Requests by Endpoint",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "weather_app_requests_by_endpoint",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "Memory Usage",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "nodejs_memory_usage_bytes{type='heapUsed'}",
+            "legendFormat": "Heap Used"
+          },
+          {
+            "expr": "nodejs_memory_usage_bytes{type='heapTotal'}",
+            "legendFormat": "Heap Total"
+          }
+        ],
+        "type": "graph",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        }
+      },
+      {
+        "title": "Error Rate",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(weather_app_errors_total[5m])",
+            "legendFormat": "Errors/sec"
+          }
+        ],
+        "type": "graph"
+      }
+    ],
+    "schemaVersion": 36,
+    "version": 1,
+    "refresh": "5s"
+  }
+}

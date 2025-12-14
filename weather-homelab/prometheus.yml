@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s # How often to scrape targets
+  evaluation_interval: 15s # How often to evaluate rules
+
+# Scrape configurations
+scrape_configs:
+  # Weather app backend
+  - job_name: 'weather-backend'
+    static_configs:
+      - targets: ['backend:8080']
+        labels:
+          service: 'weather-app'
+          environment: 'homelab'
+
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

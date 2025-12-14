@@ -58,6 +58,34 @@ jobs:
           echo "✗ Frontend did not become ready in time"
           exit 1
 
+      - name: Wait for Prometheus
+        run: |
+          echo "Waiting for Prometheus to be ready..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:9090/-/healthy >/dev/null 2>&1; then
+              echo "✓ Prometheus is up"
+              exit 0
+            fi
+            echo "Waiting for Prometheus... ($i/30)"
+            sleep 2
+          done
+          echo "✗ Prometheus did not become ready in time"
+          exit 1
+
+      - name: Wait for Grafana
+        run: |
+          echo "Waiting for Grafana to be ready..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:3000/api/health >/dev/null 2>&1; then
+              echo "✓ Grafana is up"
+              exit 0
+            fi
+            echo "Waiting for Grafana... ($i/30)"
+            sleep 2
+          done
+          echo "✗ Grafana did not become ready in time"
+          exit 1
+
       - name: Verify static assets load
         run: |
           echo "Checking CSS file..."
@@ -106,6 +134,53 @@ jobs:
             exit 1
           fi
 
+      - name: Test metrics endpoint
+        run: |
+          echo "Testing metrics endpoint..."
+          RESPONSE=$(docker exec weather-backend curl -fsS http://localhost:8080/metrics)
+          
+          if echo "$RESPONSE" | grep -q 'weather_app_requests_total' && \
+             echo "$RESPONSE" | grep -q 'weather_app_uptime_seconds'; then
+            echo "✓ Metrics endpoint works"
+            echo "$RESPONSE" | head -n 20
+          else
+            echo "✗ Metrics endpoint failed"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Verify Prometheus is scraping
+        run: |
+          echo "Checking if Prometheus is scraping backend..."
+          sleep 5  # Wait for at least one scrape
+          
+          TARGETS=$(curl -fsS http://localhost:9090/api/v1/targets)
+          
+          if echo "$TARGETS" | grep -q '"job":"weather-backend"' && \
+             echo "$TARGETS" | grep -q '"health":"up"'; then
+            echo "✓ Prometheus is scraping backend successfully"
+          else
+            echo "✗ Prometheus not scraping backend properly"
+            echo "$TARGETS"
+            exit 1
+          fi
+
+      - name: Verify metrics in Prometheus
+        run: |
+          echo "Checking if metrics are available in Prometheus..."
+          sleep 10  # Wait for metrics to be collected
+          
+          QUERY=$(curl -fsS "http://localhost:9090/api/v1/query?query=weather_app_uptime_seconds")
+          
+          if echo "$QUERY" | grep -q '"status":"success"'; then
+            echo "✓ Metrics are queryable in Prometheus"
+            echo "$QUERY" | head -c 300
+          else
+            echo "✗ Metrics not available in Prometheus"
+            echo "$QUERY"
+            exit 1
+          fi
+
       - name: Test error handling - Invalid geocoding
         run: |
           echo "Testing error handling for invalid location..."
@@ -130,6 +205,25 @@ jobs:
             exit 1
           fi
 
+      - name: Verify error tracking
+        run: |
+          echo "Verifying errors are tracked in metrics..."
+          # Generate some errors
+          curl -s "http://localhost:8085/api/geo?q=" >/dev/null || true
+          curl -s "http://localhost:8085/api/weather?lat=bad&lon=data" >/dev/null || true
+          
+          sleep 2
+          
+          METRICS=$(docker exec weather-backend curl -fsS http://localhost:8080/metrics)
+          
+          if echo "$METRICS" | grep -q 'weather_app_errors_total'; then
+            echo "✓ Error tracking is working"
+            echo "$METRICS" | grep errors_total
+          else
+            echo "✗ Error tracking not found in metrics"
+            exit 1
+          fi
+
       - name: Check container health
         if: always()
         working-directory: weather-homelab
@@ -139,6 +233,12 @@ jobs:
           echo
           echo "=== Backend Health ==="
           docker exec weather-backend wget -q -O- http://localhost:8080/health || echo "Backend health check failed"
+          echo
+          echo "=== Prometheus Health ==="
+          curl -fsS http://localhost:9090/-/healthy || echo "Prometheus health check failed"
+          echo
+          echo "=== Grafana Health ==="
+          curl -fsS http://localhost:3000/api/health || echo "Grafana health check failed"
 
       - name: Show logs on failure
         if: failure()
@@ -149,6 +249,12 @@ jobs:
           echo
           echo "=== Backend Logs ==="
           docker compose logs backend
+          echo
+          echo "=== Prometheus Logs ==="
+          docker compose logs prometheus
+          echo
+          echo "=== Grafana Logs ==="
+          docker compose logs grafana
 
       - name: Teardown
         if: always()
