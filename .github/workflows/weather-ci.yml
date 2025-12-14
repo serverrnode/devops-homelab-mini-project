@@ -152,7 +152,7 @@ jobs:
       - name: Verify Prometheus is scraping
         run: |
           echo "Checking if Prometheus is scraping backend..."
-          sleep 5  # Wait for at least one scrape
+          sleep 20  # Wait for Prometheus to complete first scrape (15s interval + buffer)
           
           TARGETS=$(curl -fsS http://localhost:9090/api/v1/targets)
           
