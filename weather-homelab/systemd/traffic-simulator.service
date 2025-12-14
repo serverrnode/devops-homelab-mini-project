@@ -1,0 +1,20 @@
+[Unit]
+Description=Weather App Traffic Simulator
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/devops-homelab-mini-project/weather-homelab
+ExecStart=/home/ubuntu/devops-homelab-mini-project/weather-homelab/scripts/traffic-simulator.sh
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=traffic-simulator
+
+[Install]
+WantedBy=multi-user.target
