@@ -27,9 +27,9 @@ function createSunTimesDisplay(daily) {
           <div class="daylight-bar" style="left: ${leftPercent}%; width: ${widthPercent}%;"></div>
         </div>
         <div class="sun-info">
-          <span class="sun-time">ðŸŒ… ${sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
+          <span class="sun-time">🌅 ${sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
           <span class="daylight-duration">${hours}h ${minutes}m</span>
-          <span class="sun-time">ðŸŒ‡ ${sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
+          <span class="sun-time">🌇 ${sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
         </div>
       </div>
     `;
