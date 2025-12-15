@@ -24,7 +24,7 @@ function createHourlyCharts(hourly) {
           pointHoverRadius: 5,
         }]
       },
-      options: getHourlyChartOptions('°C')
+      options: getHourlyChartOptions('Â°C')
     });
   }
 
@@ -110,7 +110,7 @@ function createHourlyCharts(hourly) {
           }
         ]
       },
-      options: getHourlyChartOptions('°C')
+      options: getHourlyChartOptions('Â°C')
     });
   }
 }
@@ -186,7 +186,7 @@ function initializeMap(location) {
 
   // Add tile layer
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
+    attribution: 'Â© OpenStreetMap contributors',
     maxZoom: 19,
   }).addTo(map);
 
@@ -211,9 +211,9 @@ function initializeMap(location) {
       const newMarker = L.marker([lat, lon]).addTo(map);
       newMarker.bindPopup(`
         <div class="popup-location">Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}</div>
-        <div class="popup-temp">${Math.round(data.current.temperature_2m)}°C</div>
+        <div class="popup-temp">${Math.round(data.current.temperature_2m)}Â°C</div>
         <div class="popup-details">
-          Feels like: ${Math.round(data.current.apparent_temperature)}°C<br>
+          Feels like: ${Math.round(data.current.apparent_temperature)}Â°C<br>
           Humidity: ${data.current.relative_humidity_2m}%<br>
           Wind: ${Math.round(data.current.wind_speed_10m)} km/h
         </div>
@@ -258,17 +258,17 @@ window.showDayDetails = function(dayIndex) {
   const content = document.getElementById('dayModalContent');
   
   content.innerHTML = `
-    <h2 style="margin-bottom: 20px; color: #1e293b;">📅 ${formatDateFull(dayDate)}</h2>
+    <h2 style="margin-bottom: 20px; color: #1e293b;">ðŸ“… ${formatDateFull(dayDate)}</h2>
     
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px;">
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px;">
         <div>
           <div style="font-size: 0.9rem; opacity: 0.9;">High</div>
-          <div style="font-size: 2rem; font-weight: 700;">${Math.round(daily.temperature_2m_max[dayIndex])}°C</div>
+          <div style="font-size: 2rem; font-weight: 700;">${Math.round(daily.temperature_2m_max[dayIndex])}Â°C</div>
         </div>
         <div>
           <div style="font-size: 0.9rem; opacity: 0.9;">Low</div>
-          <div style="font-size: 2rem; font-weight: 700;">${Math.round(daily.temperature_2m_min[dayIndex])}°C</div>
+          <div style="font-size: 2rem; font-weight: 700;">${Math.round(daily.temperature_2m_min[dayIndex])}Â°C</div>
         </div>
         <div>
           <div style="font-size: 0.9rem; opacity: 0.9;">Precipitation</div>
@@ -283,15 +283,15 @@ window.showDayDetails = function(dayIndex) {
       <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.3);">
         <div style="display: flex; gap: 30px; flex-wrap: wrap;">
           <div>
-            <span style="font-size: 0.9rem; opacity: 0.9;">🌅 Sunrise:</span>
+            <span style="font-size: 0.9rem; opacity: 0.9;">ðŸŒ… Sunrise:</span>
             <span style="font-weight: 600; margin-left: 8px;">${new Date(daily.sunrise[dayIndex]).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
           </div>
           <div>
-            <span style="font-size: 0.9rem; opacity: 0.9;">🌇 Sunset:</span>
+            <span style="font-size: 0.9rem; opacity: 0.9;">ðŸŒ‡ Sunset:</span>
             <span style="font-weight: 600; margin-left: 8px;">${new Date(daily.sunset[dayIndex]).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
           </div>
           <div>
-            <span style="font-size: 0.9rem; opacity: 0.9;">💨 Max Wind:</span>
+            <span style="font-size: 0.9rem; opacity: 0.9;">ðŸ’¨ Max Wind:</span>
             <span style="font-weight: 600; margin-left: 8px;">${Math.round(daily.wind_speed_10m_max[dayIndex])} km/h</span>
           </div>
         </div>
@@ -300,21 +300,21 @@ window.showDayDetails = function(dayIndex) {
     
     ${dayHourlyLabels.length > 0 ? `
       <div class="chart-container">
-        <div class="chart-title">🌡️ Hourly Temperature</div>
+        <div class="chart-title">ðŸŒ¡ï¸ Hourly Temperature</div>
         <div class="chart-wrapper">
           <canvas id="dayTempChart"></canvas>
         </div>
       </div>
       
       <div class="chart-container">
-        <div class="chart-title">💧 Hourly Humidity</div>
+        <div class="chart-title">ðŸ’§ Hourly Humidity</div>
         <div class="chart-wrapper">
           <canvas id="dayHumidityChart"></canvas>
         </div>
       </div>
       
       <div class="chart-container">
-        <div class="chart-title">💨 Hourly Wind Speed</div>
+        <div class="chart-title">ðŸ’¨ Hourly Wind Speed</div>
         <div class="chart-wrapper">
           <canvas id="dayWindChart"></canvas>
         </div>
@@ -327,7 +327,7 @@ window.showDayDetails = function(dayIndex) {
   // Create day-specific charts
   if (dayHourlyLabels.length > 0) {
     setTimeout(() => {
-      createDayChart('dayTempChart', dayHourlyLabels, dayHourlyTemp, '°C', '#667eea');
+      createDayChart('dayTempChart', dayHourlyLabels, dayHourlyTemp, 'Â°C', '#667eea');
       createDayChart('dayHumidityChart', dayHourlyLabels, dayHourlyHumidity, '%', '#3b82f6');
       createDayChart('dayWindChart', dayHourlyLabels, dayHourlyWind, ' km/h', '#10b981');
     }, 100);

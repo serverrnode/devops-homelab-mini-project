@@ -41,6 +41,7 @@ async function searchLocations() {
 
     locations = data.results || [];
     locationSelect.innerHTML = '<option value="">Choose a location...</option>';
+    locationSelect.disabled = false; // Enable the dropdown
 
     if (locations.length === 0) {
       weatherCard.innerHTML = `
@@ -50,7 +51,9 @@ async function searchLocations() {
         </div>
       `;
       weatherCard.classList.remove('hidden');
+      weatherCard.style.display = 'block';
       locationSelectGroup.style.display = 'none';
+      locationSelect.disabled = true;
       getWeatherBtn.disabled = true;
       return;
     }
@@ -73,6 +76,7 @@ async function searchLocations() {
       </div>
     `;
     weatherCard.classList.remove('hidden');
+    weatherCard.style.display = 'block';
   } finally {
     searchBtn.textContent = 'Search';
     searchBtn.disabled = false;
@@ -94,6 +98,7 @@ async function getWeather(days = forecastDays) {
 
     weatherCard.innerHTML = '<div class="loading">Loading weather data...</div>';
     weatherCard.classList.remove('hidden');
+    weatherCard.style.display = 'block';
 
     const response = await fetch(
       `/api/weather?lat=${location.latitude}&lon=${location.longitude}&days=${days}`
@@ -119,6 +124,8 @@ async function getWeather(days = forecastDays) {
         <strong>Error:</strong> Failed to fetch weather data. Please try again.
       </div>
     `;
+    weatherCard.classList.remove('hidden');
+    weatherCard.style.display = 'block';
   } finally {
     getWeatherBtn.textContent = 'Get Weather';
     getWeatherBtn.disabled = false;
@@ -303,6 +310,7 @@ function displayWeather(location, data, historicalData) {
   `;
 
   weatherCard.classList.remove('hidden');
+  weatherCard.style.display = 'block';
 
   // Setup tabs
   setupTabs();
